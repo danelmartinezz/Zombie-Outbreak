@@ -839,7 +839,7 @@ ModelImporter:
     - name: LeftHand
       parentName: LeftForeArm
       position: {x: 0.000014222605, y: 0.26552507, z: -1.0530207e-14}
-      rotation: {x: -0.0019817124, y: -0.0694989, z: 0.06431484, w: 0.9955047}
+      rotation: {x: -0.0019817126, y: -0.0694989, z: 0.06431485, w: 0.9955047}
       scale: {x: 1, y: 1, z: 1}
     - name: LeftHandIndex1
       parentName: LeftHand
