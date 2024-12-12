@@ -10,7 +10,7 @@ public enum AIStateType { None, Idle, Alert, Patrol, Attack, Feeding, Pursuit, D
 public enum AITargetType { None, Waypoint, Visual_Player, Visual_Light, Visual_Food, Audio }
 
 // Define los tipos de eventos de activación que puede manejar la IA
-public enum AITriggerEventType { None, Enter, Exit }
+public enum AITriggerEventType { None, Enter, Stay, Exit }
 
 // Representa un objetivo que puede ser procesado por la IA
 public struct AITarget
@@ -61,7 +61,8 @@ public abstract class AIStateMachine : MonoBehaviour
     public AITarget audioThreat = new AITarget();
 
 
-    // Protected
+    // Protected 
+    // Referencia al estado actual
     protected AIState _currentState = null;
     // Diccionario que almacena los estados disponibles en la máquina de estados
     protected Dictionary<AIStateType, AIState> _states = new Dictionary<AIStateType, AIState>();
@@ -82,6 +83,32 @@ public abstract class AIStateMachine : MonoBehaviour
     // Propiedades públicas para acceder a componentes
     public Animator Animator { get { return _animator; } }
     public NavMeshAgent NavAgent { get { return _navAgent; } }
+    public Vector3 SensorPosition
+    {
+        get
+        {
+            if(_sensorTrigger == null) return Vector3.zero;
+            Vector3 point = _sensorTrigger.transform.position;
+            point.x += _sensorTrigger.center.x * _sensorTrigger.transform.lossyScale.x; 
+            point.y += _sensorTrigger.center.y * _sensorTrigger.transform.lossyScale.y; 
+            point.z += _sensorTrigger.center.z * _sensorTrigger.transform.lossyScale.z; 
+            return point;
+        }
+    }
+
+    public float SensorRadius
+    {
+        get
+        {
+            if(_sensorTrigger == null) return 0.0f;
+            float radius =  Mathf.Max(_sensorTrigger.radius * _sensorTrigger.transform.lossyScale.x, 
+                                      _sensorTrigger.radius * _sensorTrigger.transform.lossyScale.y);
+
+            return Mathf.Max(radius, _sensorTrigger.radius * _sensorTrigger.transform.lossyScale.z);
+        }
+    }
+
+
 
     // Inicializa las referencias a los componentes en Awake
     protected virtual void Awake()
@@ -90,11 +117,31 @@ public abstract class AIStateMachine : MonoBehaviour
         _animator = GetComponent<Animator>();
         _navAgent = GetComponent<NavMeshAgent>();
         _collider = GetComponent<Collider>();
+
+        // Comprueba si hay una instancia de GameSceneManager
+        if(GameSceneManager.Instance != null)
+        {
+            // Obtiene el ID de la instancia del objeto y registra la IA en la escena de juego
+            if(_collider) GameSceneManager.Instance.RegisterAIStateMachine(_collider.GetInstanceID(), this); 
+            if(_sensorTrigger) GameSceneManager.Instance.RegisterAIStateMachine(_sensorTrigger.GetInstanceID(), this);
+        }
     }
 
     // Configura los estados de la máquina en el inicio
     protected virtual void Start()
     {
+    
+        if(_sensorTrigger != null)
+        {
+            // Obtiene la referencia al componente AISensor
+            AISensor sensor = _sensorTrigger.GetComponent<AISensor>();
+            if(sensor != null)
+            {
+                // Establece el padre de la IA en el sensor
+                sensor.ParentStateMachine = this;
+            }
+        }
+
         // Obtiene todos los estados definidos en este GameObject
         AIState[] states = GetComponents<AIState>();
 
@@ -171,6 +218,74 @@ public abstract class AIStateMachine : MonoBehaviour
         }
     }
 
+    protected virtual void OnAnimatorMove()
+    {                
+        if(_currentState != null)
+            _currentState.OnAnimatorUpdated();
+    }
+
+    protected virtual void OnAnimatorIK(int layerIndex)
+    {
+        if(_currentState != null)
+        {
+            _currentState.OnAnimatorIKUpdated();
+        }
+    }
+
+    /// <summary>
+    /// Llamado cuando el trigger del objetivo colisiona con el personaje.
+    /// </summary>
+    /// <param name="other">El objeto que se encuentra en el trigger.</param>
+    protected virtual void OnTriggerEnter(Collider other)
+    {
+        // Verifica si el objeto es el trigger del objetivo
+        if(_targetTrigger == null || other != _targetTrigger) return;
+
+        // Verifica si el estado actual no es null
+        if(_currentState)
+            _currentState.OnDestinationReached(true); // Establece el destino como alcanzado
+    }
+
+    /// <summary>
+    /// Llamado cuando el trigger del objetivo deja de colisionar con el personaje.
+    /// </summary>
+    /// <param name="other">El objeto que ha salido del trigger.</param>
+    protected virtual void OnTriggerExit(Collider other)
+    {
+        // Verifica si el objeto es el trigger del objetivo
+        if(_targetTrigger == null || other != _targetTrigger) return;
+
+        // Verifica si el estado actual no es null
+        if(_currentState)
+            _currentState.OnDestinationReached(false); // Establece el destino como no alcanzado
+    }
+
+    /// <summary>
+    /// Establece la actualización de la posición y la rotación del agente de navegación.
+    /// </summary>
+    /// <param name="positionUpdate">Indica si se debe actualizar la posición del agente.</param>
+    /// <param name="rotationUpdate">Indica si se debe actualizar la rotación del agente.</param>
+    public void NavAgentControl(bool positionUpdate, bool rotationUpdate)
+    {
+         if(_navAgent)
+         {
+            // Establece la actualización de la posición y la rotación
+            _navAgent.updatePosition = positionUpdate;
+            _navAgent.updateRotation = rotationUpdate;
+         }
+    }
+
+    /// <summary>
+    /// Maneja el evento de colisión con un trigger.
+    /// </summary>
+    /// <param name="type">Tipo de evento de trigger.</param>
+    /// <param name="other">Objeto que colisionó con el trigger.</param>
+    public virtual void OnTriggerEvent(AITriggerEventType type, Collider other) 
+    {
+        if(_currentState != null)
+            _currentState.OnTriggerEvent(type, other); // Llamada al estado actual para manejar el evento 
+    }
+
     // Establece un objetivo con la información proporcionada
     public void SetTarget(AITargetType type, Collider collider, Vector3 position, float distance)
     {
@@ -221,4 +336,5 @@ public abstract class AIStateMachine : MonoBehaviour
             _targetTrigger.enabled = false;
         }
     }
+    
 }
