@@ -67,6 +67,8 @@ public abstract class AIStateMachine : MonoBehaviour
     // Diccionario que almacena los estados disponibles en la máquina de estados
     protected Dictionary<AIStateType, AIState> _states = new Dictionary<AIStateType, AIState>();
     protected AITarget _target = new AITarget(); // Objetivo actual
+    protected int _rootPositionRefCount = 0;
+    protected int _rootRotationRefCount = 0;
     
     // Protected Inspector Assigned
     [SerializeField] protected AIStateType _currentStateType = AIStateType.Idle;
@@ -108,6 +110,8 @@ public abstract class AIStateMachine : MonoBehaviour
         }
     }
 
+    public bool UseRootPosition {get {return _rootPositionRefCount > 0; } }
+    public bool UseRootRotation {get {return _rootRotationRefCount > 0; } }
 
 
     // Inicializa las referencias a los componentes en Awake
@@ -165,6 +169,15 @@ public abstract class AIStateMachine : MonoBehaviour
         else
         { 
             _currentState = null;
+        }
+
+        if (_animator)
+        {
+            AIStateMachineLink[] links = _animator.GetBehaviours<AIStateMachineLink>();
+            foreach(AIStateMachineLink link in links)
+            {
+                link.StateMachine = this;
+            }
         }
     }
 
@@ -335,6 +348,17 @@ public abstract class AIStateMachine : MonoBehaviour
         {
             _targetTrigger.enabled = false;
         }
+    }
+
+    /// <summary>
+    /// Llamado por la State Machine Behaviours para habilitar/deshabilitar el movimiento de la raíz.
+    /// </summary>
+    /// <param name="rootPosition">El número de solicitudes para controlar la posición raíz</param>
+    /// <param name="rootRotation">El número de solicitudes para controlar la rotación de la raíz.</param>
+    public void AddRootionMotionRequest(int rootPosition, int rootRotation)
+    {
+        _rootPositionRefCount += rootPosition;
+        _rootRotationRefCount += rootRotation;
     }
     
 }
